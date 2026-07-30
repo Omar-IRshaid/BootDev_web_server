@@ -4,10 +4,19 @@ import { middlewareMetricsInc } from "./middleware/middlewareMetricsInc.js";
 import { config } from "./config.js";
 import { errorHandler } from "./error/errorHandler.js";
 import { BadRequestError } from "./error/customerErrorHanlders/badRequestError.js";
+import postgres from "postgres";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { createUser, deleteAllUsers } from "./db/queries/users.js";
+import { ForbiddenError } from "./error/customerErrorHanlders/forbiddenError.js";
+import { createChirp } from "./db/queries/chirps.js";
 
 const app = express();
 const PORT = 8080;
 let count = 0;
+const migrationClient = postgres(config.db.url, { max: 1 });
+await migrate(drizzle(migrationClient), config.db.migrationConfig);
+
 app.use("/app", middlewareMetricsInc, express.static("./src/app"));
 app.use(middlewareLogResponsess);
 app.use(express.json());
@@ -25,39 +34,95 @@ app.get("/admin/metrics", (req: Request, res: Response) => {
   res.status(200).send(`<html>
     <body>
       <h1>Welcome, Chirpy Admin</h1>
-      <p>Chirpy has been visited ${config.fileserverHits} times!</p>
+      <p>Chirpy has been visited ${config.api.fileserverHits} times!</p>
     </body>
   </html>`);
 });
 
-app.post("/admin/reset", (req: Request, res: Response) => {
-  config.fileserverHits = 0;
-  res.end("Count is set to 0");
+app.post("/admin/reset", async (req: Request, res: Response) => {
+  if (config.api.platform === "dev") {
+    config.api.fileserverHits = 0;
+    res.end("Count is set to 0");
+    await deleteAllUsers();
+  } else {
+    throw new ForbiddenError("You Are Not Allowed to use /admin/reset endpoint!!");
+  }
 });
 
-app.post("/api/validate_chirp", (req: Request, res: Response) => {
-  type para = {
-    body: string;
+// app.post("/api/validate_chirp", (req: Request, res: Response) => {
+//   type para = {
+//     body: string;
+//   };
+//   res.header("Content-Type", "application/json");
+
+//   const obj: para = req.body;
+
+//   if (obj.body.length > 140) {
+//     throw new BadRequestError("Chirp is too long. Max length is 140");
+//   } else {
+//     const arr = obj.body.split(" ");
+//     arr.forEach((word, index) => {
+//       if (word.toLowerCase() === "kerfuffle" || word.toLowerCase() === "sharbert" || word.toLowerCase() === "fornax") {
+//         arr[index] = "****";
+//       }
+//     });
+
+//     const str = arr.join(" ");
+
+//     const x = { cleanedBody: str };
+//     res.status(200).send(JSON.stringify(x));
+//   }
+// });
+
+app.post("/api/users", async (req: Request, res: Response) => {
+  type parameters = {
+    email: string;
   };
-  res.header("Content-Type", "application/json");
 
-  const obj: para = req.body;
+  const body: parameters = req.body;
+  if (!body.email) {
+    throw new BadRequestError("Missing Fields!");
+  }
+  const newUser = await createUser({ email: body.email });
+  if (newUser) {
+    res.status(201).json(newUser);
+  } else {
+    throw new BadRequestError("This Email already exist!!");
+  }
+});
 
-  if (obj.body.length > 140) {
+app.post("/api/chirps", async (req: Request, res: Response) => {
+  type parameters = {
+    body: string;
+    userId: string;
+  };
+
+  const params: parameters = req.body;
+  if (!params.body || !params.userId) {
+    throw new BadRequestError("Missing Fields!");
+  }
+
+  let str = params.body;
+
+  if (str.length > 140) {
     throw new BadRequestError("Chirp is too long. Max length is 140");
   } else {
-    const arr = obj.body.split(" ");
+    const arr = str.split(" ");
     arr.forEach((word, index) => {
       if (word.toLowerCase() === "kerfuffle" || word.toLowerCase() === "sharbert" || word.toLowerCase() === "fornax") {
         arr[index] = "****";
       }
     });
 
-    const str = arr.join(" ");
-
-    const x = { cleanedBody: str };
-    res.status(200).send(JSON.stringify(x));
+    str = arr.join(" ");
   }
+
+  const chirp = await createChirp({ body: str, userId: params.userId });
+  if (!chirp) {
+    throw new Error("couldnt create this chirp!!");
+  }
+
+  res.status(201).json(chirp);
 });
 
 app.use(errorHandler);
