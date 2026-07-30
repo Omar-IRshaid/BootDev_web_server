@@ -8,6 +8,7 @@ const PORT = 8080;
 let count = 0;
 app.use("/app", middlewareMetricsInc, express.static("./src/app"));
 app.use(middlewareLogResponsess);
+app.use(express.json());
 
 app.get("/api/healthz", (req: Request, res: Response) => {
   count++;
@@ -36,29 +37,31 @@ app.post("/api/validate_chirp", (req: Request, res: Response) => {
   type para = {
     body: string;
   };
-  let body = "";
   res.header("Content-Type", "application/json");
 
-  req.on("data", (data) => {
-    body += data;
-  });
+  try {
+    const obj: para = req.body;
 
-  req.on("end", () => {
-    try {
-      const obj: para = JSON.parse(body);
-
-      if (obj.body.length > 140) {
-        const x = { error: "Chirp is too long" };
-        res.status(400).send(JSON.stringify(x));
-      } else {
-        const x = { valid: true };
-        res.status(200).send(JSON.stringify(x));
-      }
-    } catch (error) {
-      const x = { error: "Something went wrong" };
+    if (obj.body.length > 140) {
+      const x = { error: "Chirp is too long" };
       res.status(400).send(JSON.stringify(x));
+    } else {
+      const arr = obj.body.split(" ");
+      arr.forEach((word, index) => {
+        if (word.toLowerCase() === "kerfuffle" || word.toLowerCase() === "sharbert" || word.toLowerCase() === "fornax") {
+          arr[index] = "****";
+        }
+      });
+
+      const str = arr.join(" ");
+
+      const x = { cleanedBody: str };
+      res.status(200).send(JSON.stringify(x));
     }
-  });
+  } catch (error) {
+    const x = { error: "Something went wrong" };
+    res.status(400).send(JSON.stringify(x));
+  }
 });
 
 app.listen(PORT, () => {
