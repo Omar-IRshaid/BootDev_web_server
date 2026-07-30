@@ -9,7 +9,8 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { createUser, deleteAllUsers } from "./db/queries/users.js";
 import { ForbiddenError } from "./error/customerErrorHanlders/forbiddenError.js";
-import { createChirp } from "./db/queries/chirps.js";
+import { createChirp, getAllChirps, getSingleChirp } from "./db/queries/chirps.js";
+import { NotFoundError } from "./error/customerErrorHanlders/notFoundError.js";
 
 const app = express();
 const PORT = 8080;
@@ -123,6 +124,25 @@ app.post("/api/chirps", async (req: Request, res: Response) => {
   }
 
   res.status(201).json(chirp);
+});
+
+app.get("/api/chirps", async (req: Request, res: Response) => {
+  const chirps = await getAllChirps();
+  res.status(200).json(chirps);
+});
+
+app.get("/api/chirps/:chirpId", async (req: Request, res: Response) => {
+  const id = req.params.chirpId;
+  if (typeof id !== "string") {
+    throw new BadRequestError("Invalid ID!!");
+  }
+
+  const chirps = await getSingleChirp(id);
+  if (!chirps) {
+    throw new NotFoundError("Chirp Not Found!!");
+  }
+
+  res.status(200).json(chirps);
 });
 
 app.use(errorHandler);
