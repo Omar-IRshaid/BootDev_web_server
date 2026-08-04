@@ -14,6 +14,7 @@ type APIConfig = {
 type Config = {
   db: DBConfig;
   api: APIConfig;
+  secret: string;
 };
 
 const migrationConfig: MigrationConfig = {
@@ -29,6 +30,11 @@ const platform = process.env.PLATFORM;
 if (!envOrThrow(platform)) {
   throw new Error("PLATFORM is not defined!!");
 }
+const secret = process.env.SECRET;
+if (!envOrThrow(secret)) {
+  throw new Error("SECRET is not defined!!");
+}
+
 const config: Config = {
   db: {
     migrationConfig: migrationConfig,
@@ -38,6 +44,7 @@ const config: Config = {
     fileserverHits: 0,
     platform: platform,
   },
+  secret: secret,
 };
 
 export { config };

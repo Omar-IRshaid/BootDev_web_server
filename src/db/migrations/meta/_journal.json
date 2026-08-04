@@ -15,6 +15,13 @@
       "when": 1785440652223,
       "tag": "0001_early_patriot",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785843400955,
+      "tag": "0002_cool_dorian_gray",
+      "breakpoints": true
     }
   ]
 }

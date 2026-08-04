@@ -7,10 +7,12 @@ import { BadRequestError } from "./error/customerErrorHanlders/badRequestError.j
 import postgres from "postgres";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { drizzle } from "drizzle-orm/postgres-js";
-import { createUser, deleteAllUsers } from "./db/queries/users.js";
+import { createUser, deleteAllUsers, getSingleUser } from "./db/queries/users.js";
 import { ForbiddenError } from "./error/customerErrorHanlders/forbiddenError.js";
 import { createChirp, getAllChirps, getSingleChirp } from "./db/queries/chirps.js";
 import { NotFoundError } from "./error/customerErrorHanlders/notFoundError.js";
+import { checkPasswordHash, hashPassword, makeJWT } from "./auth.js";
+import { UnauthorizedError } from "./error/customerErrorHanlders/unauthorizedError.js";
 
 const app = express();
 const PORT = 8080;
@@ -78,13 +80,16 @@ app.post("/admin/reset", async (req: Request, res: Response) => {
 app.post("/api/users", async (req: Request, res: Response) => {
   type parameters = {
     email: string;
+    password: string;
   };
 
   const body: parameters = req.body;
-  if (!body.email) {
+  if (!body.email || !body.password) {
     throw new BadRequestError("Missing Fields!");
   }
-  const newUser = await createUser({ email: body.email });
+  const hashed_password = await hashPassword(body.password);
+
+  const newUser = await createUser({ email: body.email, hashed_password: hashed_password });
   if (newUser) {
     res.status(201).json(newUser);
   } else {
@@ -143,6 +148,39 @@ app.get("/api/chirps/:chirpId", async (req: Request, res: Response) => {
   }
 
   res.status(200).json(chirps);
+});
+
+app.post("/api/login", async (req: Request, res: Response) => {
+  type parameters = {
+    email: string;
+    password: string;
+    expiresInSeconds: number;
+  };
+
+  const params: parameters = req.body;
+  if (!params.email || !params.password) {
+    throw new BadRequestError("Missing Fields!");
+  }
+
+  const user = await getSingleUser(params.email);
+  if (!user) {
+    throw new UnauthorizedError("incorrect email or password");
+  }
+
+  if (!(await checkPasswordHash(params.password, user.hashed_password))) {
+    throw new UnauthorizedError("incorrect email or password");
+  }
+
+  const expiresInSeconds = params.expiresInSeconds ? (params.expiresInSeconds > 3600 ? 3600 : params.expiresInSeconds) : 3600;
+  const token = makeJWT(user.id, expiresInSeconds, config.secret);
+
+  const { hashed_password, ...userResponse } = user;
+
+  const obj = {
+    token: token,
+  };
+
+  res.status(200).json({ ...userResponse, ...obj });
 });
 
 app.use(errorHandler);
