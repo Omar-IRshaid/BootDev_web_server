@@ -46,3 +46,4 @@ describe("JWT", () => {
     expect(() => validateJWT(token3, secret)).toThrow();
   });
 });
+// could add Test For bearerTOken()

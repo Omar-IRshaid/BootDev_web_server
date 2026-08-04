@@ -7,12 +7,13 @@ import { BadRequestError } from "./error/customerErrorHanlders/badRequestError.j
 import postgres from "postgres";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { drizzle } from "drizzle-orm/postgres-js";
-import { createUser, deleteAllUsers, getSingleUser } from "./db/queries/users.js";
+import { createUser, deleteAllUsers, getSingleUser, getSingleUserById } from "./db/queries/users.js";
 import { ForbiddenError } from "./error/customerErrorHanlders/forbiddenError.js";
 import { createChirp, getAllChirps, getSingleChirp } from "./db/queries/chirps.js";
 import { NotFoundError } from "./error/customerErrorHanlders/notFoundError.js";
-import { checkPasswordHash, hashPassword, makeJWT } from "./auth.js";
+import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, makeRefreshToken, validateJWT } from "./auth.js";
 import { UnauthorizedError } from "./error/customerErrorHanlders/unauthorizedError.js";
+import { createRefreshToken, getSingleRToken, updateSingleRToken } from "./db/queries/refreshToken.js";
 
 const app = express();
 const PORT = 8080;
@@ -100,11 +101,10 @@ app.post("/api/users", async (req: Request, res: Response) => {
 app.post("/api/chirps", async (req: Request, res: Response) => {
   type parameters = {
     body: string;
-    userId: string;
   };
 
   const params: parameters = req.body;
-  if (!params.body || !params.userId) {
+  if (!params.body) {
     throw new BadRequestError("Missing Fields!");
   }
 
@@ -123,7 +123,9 @@ app.post("/api/chirps", async (req: Request, res: Response) => {
     str = arr.join(" ");
   }
 
-  const chirp = await createChirp({ body: str, userId: params.userId });
+  const token = getBearerToken(req);
+  const userId = validateJWT(token, config.secret);
+  const chirp = await createChirp({ body: str, userId: userId });
   if (!chirp) {
     throw new Error("couldnt create this chirp!!");
   }
@@ -154,7 +156,6 @@ app.post("/api/login", async (req: Request, res: Response) => {
   type parameters = {
     email: string;
     password: string;
-    expiresInSeconds: number;
   };
 
   const params: parameters = req.body;
@@ -171,16 +172,53 @@ app.post("/api/login", async (req: Request, res: Response) => {
     throw new UnauthorizedError("incorrect email or password");
   }
 
-  const expiresInSeconds = params.expiresInSeconds ? (params.expiresInSeconds > 3600 ? 3600 : params.expiresInSeconds) : 3600;
+  const expiresInSeconds = 3600;
   const token = makeJWT(user.id, expiresInSeconds, config.secret);
+  const refreshToken = makeRefreshToken();
+  const RTokenObj = await createRefreshToken({ token: refreshToken, user_id: user.id, expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000) });
+  if (!RTokenObj) {
+    throw new BadRequestError("Coudnt create the Refresh token obj!!!");
+  }
 
   const { hashed_password, ...userResponse } = user;
 
   const obj = {
     token: token,
+    refreshToken: refreshToken,
   };
 
   res.status(200).json({ ...userResponse, ...obj });
+});
+
+app.post("/api/refresh", async (req: Request, res: Response) => {
+  const refreshToken = getBearerToken(req);
+
+  const RTokenObj = await getSingleRToken(refreshToken);
+  if (!RTokenObj) {
+    res.status(401).send();
+    return;
+  }
+
+  const user = await getSingleUserById(RTokenObj.user_id);
+  if (!user) {
+    throw new NotFoundError("User Not Found!!");
+  }
+
+  const token = makeJWT(user.id, 3600, config.secret);
+
+  res.status(200).json({ token: token });
+});
+
+app.post("/api/revoke", async (req: Request, res: Response) => {
+  const refreshToken = getBearerToken(req);
+
+  const RTokenObj = await getSingleRToken(refreshToken);
+  if (!RTokenObj) {
+    res.status(401).send();
+  }
+
+  await updateSingleRToken(RTokenObj.token);
+  res.status(204).send();
 });
 
 app.use(errorHandler);

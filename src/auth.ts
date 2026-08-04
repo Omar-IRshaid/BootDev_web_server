@@ -3,6 +3,7 @@ import jwt, { JsonWebTokenError } from "jsonwebtoken";
 import type { JwtPayload } from "jsonwebtoken";
 import { UnauthorizedError } from "./error/customerErrorHanlders/unauthorizedError.js";
 import express, { Request, Response } from "express";
+import crypto from "crypto";
 
 type payload = Pick<JwtPayload, "iss" | "sub" | "iat" | "exp">;
 
@@ -49,4 +50,9 @@ export function getBearerToken(req: Request): string {
   }
   const arr = token.split(" ");
   return arr[1];
+}
+
+export function makeRefreshToken(): string {
+  const buffer = crypto.randomBytes(16);
+  return buffer.toString("hex");
 }
