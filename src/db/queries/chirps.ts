@@ -23,3 +23,8 @@ export async function getSingleChirp(id: string) {
 export async function deleteSingleChirp(id: string) {
   await db.delete(chirps).where(eq(chirps.id, id));
 }
+
+export async function getAllChirpsByAuthorId(id: string) {
+  const result = await db.select().from(chirps).where(eq(chirps.userId, id)).orderBy(asc(chirps.createdAt));
+  return result;
+}

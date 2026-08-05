@@ -9,6 +9,7 @@ type DBConfig = {
 type APIConfig = {
   fileserverHits: number;
   platform: string;
+  polka_key: string;
 };
 
 type Config = {
@@ -35,6 +36,11 @@ if (!envOrThrow(secret)) {
   throw new Error("SECRET is not defined!!");
 }
 
+const polka_key = process.env.POLKA_KEY;
+if (!envOrThrow(polka_key)) {
+  throw new Error("POLKA_KEY is not defined!!");
+}
+
 const config: Config = {
   db: {
     migrationConfig: migrationConfig,
@@ -43,6 +49,7 @@ const config: Config = {
   api: {
     fileserverHits: 0,
     platform: platform,
+    polka_key: polka_key,
   },
   secret: secret,
 };

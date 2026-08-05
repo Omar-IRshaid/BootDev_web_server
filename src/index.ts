@@ -9,9 +9,9 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { createUser, deleteAllUsers, getSingleUser, getSingleUserById, updateSingleUser, updateSingleUserToChirpyRed } from "./db/queries/users.js";
 import { ForbiddenError } from "./error/customerErrorHanlders/forbiddenError.js";
-import { createChirp, deleteSingleChirp, getAllChirps, getSingleChirp } from "./db/queries/chirps.js";
+import { createChirp, deleteSingleChirp, getAllChirps, getAllChirpsByAuthorId, getSingleChirp } from "./db/queries/chirps.js";
 import { NotFoundError } from "./error/customerErrorHanlders/notFoundError.js";
-import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, makeRefreshToken, validateJWT } from "./auth.js";
+import { checkPasswordHash, getAPIKey, getBearerToken, hashPassword, makeJWT, makeRefreshToken, validateJWT } from "./auth.js";
 import { UnauthorizedError } from "./error/customerErrorHanlders/unauthorizedError.js";
 import { createRefreshToken, getSingleRToken, updateSingleRToken } from "./db/queries/refreshToken.js";
 import { validate as isUUID } from "uuid";
@@ -135,6 +135,13 @@ app.post("/api/chirps", async (req: Request, res: Response) => {
 });
 
 app.get("/api/chirps", async (req: Request, res: Response) => {
+  const authorId = req.query.authorId;
+  if (typeof authorId === "string") {
+    const chirps = await getAllChirpsByAuthorId(authorId);
+    res.status(200).json(chirps);
+    return;
+  }
+
   const chirps = await getAllChirps();
   res.status(200).json(chirps);
 });
@@ -298,6 +305,11 @@ app.post("/api/polka/webhooks", async (req: Request, res: Response) => {
       userId: string;
     };
   };
+
+  const polka_dev = getAPIKey(req);
+  if (polka_dev !== config.api.polka_key) {
+    throw new UnauthorizedError("Not the same Polka key!!");
+  }
 
   const body: parameters = req.body;
   if (!body.event || !body.data || !body.data.userId) {

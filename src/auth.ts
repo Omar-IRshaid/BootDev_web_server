@@ -61,3 +61,16 @@ export function makeRefreshToken(): string {
   const buffer = crypto.randomBytes(16);
   return buffer.toString("hex");
 }
+
+export function getAPIKey(req: Request) {
+  const polka_key = req.get("Authorization");
+  if (!polka_key) {
+    throw new UnauthorizedError("polka key Doesnt exist in the Request!!");
+  }
+
+  const arr = polka_key.split(" ");
+  if (arr.length < 2 || arr[0] !== "ApiKey") {
+    throw new BadRequestError("Malformed authorization header");
+  }
+  return arr[1];
+}
