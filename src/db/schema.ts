@@ -45,3 +45,4 @@ export type NewChirp = typeof chirps.$inferInsert;
 export type NewUser = typeof users.$inferInsert;
 export type NewRefreshToken = typeof refresh_tokens.$inferInsert;
 export type RefreshTokenSelect = typeof refresh_tokens.$inferSelect;
+export type SelectUser = typeof users.$inferSelect;

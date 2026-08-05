@@ -16,6 +16,6 @@ export async function getSingleRToken(token: string) {
 }
 
 export async function updateSingleRToken(token: string) {
-  const [result] = await db.update(refresh_tokens).set({ revoked_at: new Date() }).where(eq(refresh_tokens.token, token));
+  const [result] = await db.update(refresh_tokens).set({ revoked_at: new Date() }).where(eq(refresh_tokens.token, token)).returning();
   return result;
 }

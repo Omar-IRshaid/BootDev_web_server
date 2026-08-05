@@ -4,6 +4,7 @@ import type { JwtPayload } from "jsonwebtoken";
 import { UnauthorizedError } from "./error/customerErrorHanlders/unauthorizedError.js";
 import express, { Request, Response } from "express";
 import crypto from "crypto";
+import { BadRequestError } from "./error/customerErrorHanlders/badRequestError.js";
 
 type payload = Pick<JwtPayload, "iss" | "sub" | "iat" | "exp">;
 
@@ -46,9 +47,13 @@ export function validateJWT(tokenString: string, secret: string): string {
 export function getBearerToken(req: Request): string {
   const token = req.get("Authorization");
   if (!token) {
-    throw new Error("Token Doesnt exist in the Request!!");
+    throw new UnauthorizedError("Token Doesnt exist in the Request!!");
   }
+
   const arr = token.split(" ");
+  if (arr.length < 2 || arr[0] !== "Bearer") {
+    throw new BadRequestError("Malformed authorization header");
+  }
   return arr[1];
 }
 

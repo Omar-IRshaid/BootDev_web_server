@@ -7,13 +7,14 @@ import { BadRequestError } from "./error/customerErrorHanlders/badRequestError.j
 import postgres from "postgres";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { drizzle } from "drizzle-orm/postgres-js";
-import { createUser, deleteAllUsers, getSingleUser, getSingleUserById } from "./db/queries/users.js";
+import { createUser, deleteAllUsers, getSingleUser, getSingleUserById, updateSingleUser } from "./db/queries/users.js";
 import { ForbiddenError } from "./error/customerErrorHanlders/forbiddenError.js";
 import { createChirp, getAllChirps, getSingleChirp } from "./db/queries/chirps.js";
 import { NotFoundError } from "./error/customerErrorHanlders/notFoundError.js";
 import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, makeRefreshToken, validateJWT } from "./auth.js";
 import { UnauthorizedError } from "./error/customerErrorHanlders/unauthorizedError.js";
 import { createRefreshToken, getSingleRToken, updateSingleRToken } from "./db/queries/refreshToken.js";
+import { validate as isUUID } from "uuid";
 
 const app = express();
 const PORT = 8080;
@@ -144,6 +145,10 @@ app.get("/api/chirps/:chirpId", async (req: Request, res: Response) => {
     throw new BadRequestError("Invalid ID!!");
   }
 
+  if (!isUUID(id)) {
+    throw new BadRequestError("Invalid UUID ID");
+  }
+
   const chirps = await getSingleChirp(id);
   if (!chirps) {
     throw new NotFoundError("Chirp Not Found!!");
@@ -219,6 +224,46 @@ app.post("/api/revoke", async (req: Request, res: Response) => {
 
   await updateSingleRToken(RTokenObj.token);
   res.status(204).send();
+});
+
+app.put("/api/users", async (req: Request, res: Response) => {
+  type parameters = {
+    email: string;
+    password: string;
+  };
+
+  const body = req.body;
+  const BToken = getBearerToken(req);
+  console.log(BToken);
+  const userId = validateJWT(BToken, config.secret);
+  const user = await getSingleUserById(userId);
+  if (!user) {
+    throw new NotFoundError("User Not Found!!");
+  }
+  const hashed_password = await hashPassword(body.password);
+  if (body.email) user.email = body.email;
+  if (body.password) user.hashed_password = hashed_password;
+
+  const updatedUser = await updateSingleUser(user);
+  res.status(200).json(updatedUser);
+});
+
+app.get("/api/users/:userId", async (req: Request, res: Response) => {
+  const id = req.params.userId;
+  if (typeof id !== "string") {
+    throw new BadRequestError("Invalid ID!!");
+  }
+
+  if (!isUUID(id)) {
+    throw new BadRequestError("Invalid UUID ID");
+  }
+
+  const user = await getSingleUserById(id);
+  if (!user) {
+    throw new NotFoundError("Chirp Not Found!!");
+  }
+
+  res.status(200).json(user);
 });
 
 app.use(errorHandler);
