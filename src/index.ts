@@ -7,9 +7,9 @@ import { BadRequestError } from "./error/customerErrorHanlders/badRequestError.j
 import postgres from "postgres";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { drizzle } from "drizzle-orm/postgres-js";
-import { createUser, deleteAllUsers, getSingleUser, getSingleUserById, updateSingleUser } from "./db/queries/users.js";
+import { createUser, deleteAllUsers, getSingleUser, getSingleUserById, updateSingleUser, updateSingleUserToChirpyRed } from "./db/queries/users.js";
 import { ForbiddenError } from "./error/customerErrorHanlders/forbiddenError.js";
-import { createChirp, getAllChirps, getSingleChirp } from "./db/queries/chirps.js";
+import { createChirp, deleteSingleChirp, getAllChirps, getSingleChirp } from "./db/queries/chirps.js";
 import { NotFoundError } from "./error/customerErrorHanlders/notFoundError.js";
 import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, makeRefreshToken, validateJWT } from "./auth.js";
 import { UnauthorizedError } from "./error/customerErrorHanlders/unauthorizedError.js";
@@ -264,6 +264,58 @@ app.get("/api/users/:userId", async (req: Request, res: Response) => {
   }
 
   res.status(200).json(user);
+});
+
+app.delete("/api/chirps/:chirpId", async (req: Request, res: Response) => {
+  const id = req.params.chirpId;
+  if (typeof id !== "string") {
+    throw new BadRequestError("Invalid ID!!");
+  }
+
+  if (!isUUID(id)) {
+    throw new BadRequestError("Invalid UUID ID");
+  }
+
+  const token = getBearerToken(req);
+  const userId = validateJWT(token, config.secret);
+  const chirp = await getSingleChirp(id);
+  if (!chirp) {
+    throw new NotFoundError("Chirp Not Found!!");
+  }
+
+  if (chirp.userId === userId) {
+    await deleteSingleChirp(id);
+    res.status(204).json({ success: true, msg: "Chirp deleted successfully" });
+  } else {
+    throw new ForbiddenError("User is not the author of this CHIRP!!");
+  }
+});
+
+app.post("/api/polka/webhooks", async (req: Request, res: Response) => {
+  type parameters = {
+    event: string;
+    data: {
+      userId: string;
+    };
+  };
+
+  const body: parameters = req.body;
+  if (!body.event || !body.data || !body.data.userId) {
+    throw new BadRequestError("Missing Fields!!");
+  }
+
+  if (body.event !== "user.upgraded") {
+    res.status(204).send("Even is not User.updgrade!!");
+    return;
+  }
+
+  const user = await getSingleUserById(body.data.userId);
+  if (!user) {
+    throw new NotFoundError("User Not Found!!");
+  }
+
+  await updateSingleUserToChirpyRed(user.id);
+  res.status(204).send();
 });
 
 app.use(errorHandler);
